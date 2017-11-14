@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 func ScanLFLF(data []byte, atEOF bool) (advance int, token []byte, err error) {
@@ -26,7 +27,10 @@ func ScanLFLF(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	return 0, nil, nil
 }
 
-func CreateProcess(label string, name string, args ...string) (*Process, error) {
+func CreateProcess(label string, command string) (*Process, error) {
+	commandParts := strings.Split(command, " ")
+	name := commandParts[0]
+	args := commandParts[1:]
 	cmd := exec.Command(name, args...)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -81,10 +85,6 @@ func (p *Process) send(message string, args ...interface{}) (string, error) {
 	}
 
 	return response[2 : len(response)-2], nil
-}
-
-func CreateGnuGo(label string) (*Process, error) {
-	return CreateProcess(label, "gnugo", "--mode", "gtp")
 }
 
 // Commands
@@ -148,6 +148,17 @@ func (p *Process) FinalScore() (string, error) {
 }
 
 func (p *Process) Close() error {
-	_, err := p.send("close")
-	return err
+	if _, err := p.send("quit"); err != nil {
+		return err
+	}
+	if err := p.stdin.Close(); err != nil {
+		return err
+	}
+	if err := p.cmd.Wait(); err != nil {
+		return err
+	}
+	if !p.cmd.ProcessState.Success() {
+		return fmt.Errorf("Process did not quit successfully")
+	}
+	return nil
 }

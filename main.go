@@ -1,9 +1,22 @@
 package main
 
 import (
+	"flag"
 	"github.com/justuswilhelm/gotogo/lib"
 	"log"
 )
+
+var (
+	blackCommand = ""
+	whiteCommand = ""
+	black        *lib.Process
+	white        *lib.Process
+)
+
+func init() {
+	flag.StringVar(&blackCommand, "b", "gnugo --mode gtp", "Black Command")
+	flag.StringVar(&whiteCommand, "w", "gnugo --mode gtp", "White Command")
+}
 
 func sanityCheck(p *lib.Process) error {
 	name, err := p.Name()
@@ -48,36 +61,35 @@ func initialize(p *lib.Process, boardsize int, komi string) error {
 	return nil
 }
 
-func create() (*lib.Process, *lib.Process) {
-	black, err := lib.CreateGnuGo("black")
+func create() error {
+	var err error
+	black, err = lib.CreateProcess("black", blackCommand)
 	if err != nil {
-		log.Fatalf("%+v", err)
+		return err
 	}
-	white, err := lib.CreateGnuGo("white")
+	white, err = lib.CreateProcess("white", whiteCommand)
 	if err != nil {
-		log.Fatalf("%+v", err)
+		return err
 	}
-	err = black.StartProcess()
-	if err != nil {
-		log.Fatalf("%+v", err)
+	if err := black.StartProcess(); err != nil {
+		return err
 	}
-	err = white.StartProcess()
-	if err != nil {
-		log.Fatalf("%+v", err)
+	if err := white.StartProcess(); err != nil {
+		return err
 	}
 	if err := sanityCheck(black); err != nil {
-		log.Fatalf("Black sanity check fatal: %+v", err)
+		return err
 	}
 	if err := sanityCheck(white); err != nil {
-		log.Fatalf("White sanity check fatal: %+v", err)
+		return err
 	}
 	if err := initialize(black, 9, "5.5"); err != nil {
-		log.Fatalf("Black sanity check fatal: %+v", err)
+		return err
 	}
 	if err := initialize(white, 9, "5.5"); err != nil {
-		log.Fatalf("White sanity check fatal: %+v", err)
+		return err
 	}
-	return black, white
+	return nil
 }
 
 func isPass(move string) bool {
@@ -97,6 +109,8 @@ func play(black *lib.Process, white *lib.Process) error {
 			} else {
 				firstPass = true
 			}
+		} else {
+			firstPass = false
 		}
 		logBoard(black)
 		if err := white.Play(lib.Black, blackMove); err != nil {
@@ -113,6 +127,8 @@ func play(black *lib.Process, white *lib.Process) error {
 			} else {
 				firstPass = true
 			}
+		} else {
+			firstPass = false
 		}
 		logBoard(white)
 		if err := black.Play(lib.White, whiteMove); err != nil {
@@ -135,7 +151,11 @@ func play(black *lib.Process, white *lib.Process) error {
 }
 
 func main() {
-	black, white := create()
+	flag.Parse()
+
+	if err := create(); err != nil {
+		log.Fatalf("Error when creating game: %+v", err)
+	}
 	if err := play(black, white); err != nil {
 		log.Fatalf("Error when playing game: %+v", err)
 	}
